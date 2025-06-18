@@ -9,7 +9,7 @@ Code Forge is an AI-powered coding assistant CLI that helps you write, review, a
 You can install Code Forge globally to use it with the simple `forge` command:
 
 ```bash
-npm install -g @antinomyhq/forge
+npm install -g forgecode
 ```
 
 After installation, you can run the command from anywhere:
@@ -23,7 +23,7 @@ forge --help
 If you prefer not to install anything globally, you can use npx to run Code Forge directly:
 
 ```bash
-npx @antinomyhq/forge
+npx forgecode
 ```
 
 Both methods will automatically download the appropriate binary for your platform.
@@ -43,7 +43,7 @@ Once installed, you can use the `forge` command:
 forge --version
 
 # Or with npx
-npx @antinomyhq/forge --version
+npx forgecode --version
 ```
 
 ## Troubleshooting
@@ -62,7 +62,7 @@ This means the binary requires a newer version of glibc than what's available on
    ```bash
    # Set environment variable to force musl before installing
    export FORCE_MUSL=1
-   npm install -g @antinomyhq/forge
+   npm install -g forgecode
    ```
 
 2. **Update your system's glibc** (if you have administrative access)
