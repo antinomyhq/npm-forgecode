@@ -294,7 +294,6 @@ model: deepseek-r1-distill-llama-70b
 To use Amazon Bedrock models with Forge, you'll need to first set up the [Bedrock Access Gateway](https://github.com/aws-samples/bedrock-access-gateway):
 
 1. **Set up Bedrock Access Gateway**:
-
    - Follow the deployment steps in the [Bedrock Access Gateway repo](https://github.com/aws-samples/bedrock-access-gateway)
    - Create your own API key in Secrets Manager
    - Deploy the CloudFormation stack
@@ -457,6 +456,7 @@ MCP tools can be used as part of multi-agent workflows, allowing specialized age
 For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://forgecode.dev/docs).
 
 ---
+
 ## Troubleshooting
 
 ### Linux glibc Compatibility Issues
@@ -470,6 +470,7 @@ If you encounter errors like:
 This means the binary requires a newer version of glibc than what's available on your system. You can use one of these solutions:
 
 1. **Force using the musl binary** (recommended for environments like Codespaces):
+
    ```bash
    # Set environment variable to force musl before installing
    export FORCE_MUSL=1
@@ -480,8 +481,7 @@ This means the binary requires a newer version of glibc than what's available on
 
 3. **Use a Docker container with a newer Linux distribution**
 
-The musl binary has fewer system dependencies and should work on most Linux systems regardless of glibc version.
----
+## The musl binary has fewer system dependencies and should work on most Linux systems regardless of glibc version.
 
 ## Community
 
@@ -499,7 +499,6 @@ Your support drives Forge's continued evolution! By starring our GitHub reposito
 - Motivate our development team 💪
 - Enable us to prioritize new features 🛠️
 - Strengthen our open-source community 🌱
-
 
 ## License
 

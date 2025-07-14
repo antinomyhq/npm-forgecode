@@ -15,7 +15,7 @@ const forgeBinaryPath = join(__dirname, 'forge' + getBinaryExtension());
 // Check if the binary exists
 if (!existsSync(forgeBinaryPath)) {
   console.error(`❌ Forge binary not found at: ${forgeBinaryPath}`);
-  console.error('Please try reinstalling the package with: npm install -g @antinomyhq/forge');
+  console.error('Please try reinstalling the package with: npm install -g forgecode');
   console.error(`System information: ${process.platform} (${process.arch})`);
   process.exit(1);
 }
