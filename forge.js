@@ -15,16 +15,19 @@ const forgeBinaryPath = join(__dirname, 'forge' + getBinaryExtension());
 // Check if the binary exists
 if (!existsSync(forgeBinaryPath)) {
   console.error(`❌ Forge binary not found at: ${forgeBinaryPath}`);
-  console.error('Please try reinstalling the package with: npm install -g @antinomyhq/forge');
+  console.error('Please try reinstalling the package with: npm install -g forgecode');
   console.error(`System information: ${process.platform} (${process.arch})`);
   process.exit(1);
 }
 
 // Execute the binary with the same arguments
-const forgeProcess = spawn(forgeBinaryPath, process.argv.slice(2), { 
-  stdio: 'inherit',
-  shell: process.platform === 'win32' // Use shell on Windows
-});
+const forgeProcess = spawn(
+  process.platform === 'win32' ? `"${forgeBinaryPath}"` : forgeBinaryPath, 
+  process.argv.slice(2), 
+  { 
+    stdio: 'inherit',
+    shell: process.platform === 'win32' // Use shell on Windows
+  });
 
 // Pass through SIGINT signals to the child process
 process.on('SIGINT', () => {
