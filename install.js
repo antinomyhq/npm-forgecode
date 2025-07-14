@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { platform, arch } = process;
-const { join } = require('path');
+const { join, resolve } = require('path');
 const { chmodSync, copyFileSync, existsSync } = require('fs');
 const { spawnSync } = require('child_process');
 const os = require('os');
@@ -75,7 +75,10 @@ function detectLibcType() {
 // Test if a binary will run on this system
 function testBinary(binaryPath) {
   try {
-    const result = spawnSync(binaryPath, ['--version'], { 
+    // Resolve the path to get absolute path and normalize separators
+    const resolvedPath = resolve(binaryPath);
+
+    const result = spawnSync(resolvedPath, ['--version'], {
       encoding: 'utf8',
       timeout: 5000 // 5 second timeout
     });
