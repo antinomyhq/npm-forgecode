@@ -21,10 +21,13 @@ if (!existsSync(forgeBinaryPath)) {
 }
 
 // Execute the binary with the same arguments
-const forgeProcess = spawn(forgeBinaryPath, process.argv.slice(2), { 
-  stdio: 'inherit',
-  shell: process.platform === 'win32' // Use shell on Windows
-});
+const forgeProcess = spawn(
+  process.platform === 'win32' ? `"${forgeBinaryPath}"` : forgeBinaryPath, 
+  process.argv.slice(2), 
+  { 
+    stdio: 'inherit',
+    shell: process.platform === 'win32' // Use shell on Windows
+  });
 
 // Pass through SIGINT signals to the child process
 process.on('SIGINT', () => {
