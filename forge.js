@@ -25,7 +25,6 @@ if (!existsSync(forgeBinaryPath)) {
 // Configure spawn options based on platform
 const spawnOptions = {
   stdio: "inherit",
-  windowsHide: process.platform === "win32" ? true : undefined,
 };
 
 // Spawn the forge process
