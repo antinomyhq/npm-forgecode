@@ -1,38 +1,38 @@
 {
-    "name": "forgecode",
-    "version": "0.100.0",
-    "description": "Code Forge CLI - an AI-powered coding assistant",
-    "bin": {
-        "forge": "forge.js"
-    },
-    "scripts": {
-        "postinstall": "node install.js"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/antinomyhq/forge.git"
-    },
-    "keywords": [
-        "code-forge",
-        "ai",
-        "assistant",
-        "cli"
-    ],
-    "author": "Antinomy Inc.",
-    "license": "MIT",
-    "bugs": {
-        "url": "https://github.com/antinomyhq/forge/issues"
-    },
-    "homepage": "https://antinomy.ai/",
-    "files": [
-        "bin/**/*",
-        "install.js",
-        "forge.js"
-    ],
-    "engines": {
-        "node": ">=18.0.0"
-    },
-    "publishConfig": {
-        "access": "public"
-    }
+  "name": "forgecode",
+  "version": "0.100.0",
+  "description": "Code Forge CLI - an AI-powered coding assistant",
+  "bin": {
+    "forge": "forge.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/antinomyhq/forge.git"
+  },
+  "keywords": [
+    "code-forge",
+    "ai",
+    "assistant",
+    "cli"
+  ],
+  "author": "Antinomy Inc.",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/antinomyhq/forge/issues"
+  },
+  "homepage": "https://antinomy.ai/",
+  "files": [
+    "bin/**/*",
+    "install.js",
+    "forge.js"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }
