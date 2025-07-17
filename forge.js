@@ -20,24 +20,25 @@ if (!existsSync(forgeBinaryPath)) {
   process.exit(1);
 }
 
-// Execute the binary with the same arguments
-const forgeProcess = spawn(
-  process.platform === 'win32' ? `"${forgeBinaryPath}"` : forgeBinaryPath, 
-  process.argv.slice(2), 
-  { 
-    stdio: 'inherit',
-    shell: process.platform === 'win32' // Use shell on Windows
-  });
+// Configure spawn options based on platform
+const spawnOptions = {
+  stdio: 'inherit',
+};
 
-// Pass through SIGINT signals to the child process
+// Spawn the forge process
+const forgeProcess = spawn(forgeBinaryPath, process.argv.slice(2), spawnOptions);
+
+// Handle SIGINT (Ctrl+C) based on platform
 process.on('SIGINT', () => {
-  // Instead of handling here, forward to the child
-  forgeProcess.kill('SIGINT');
-  // Don't exit - let the child process determine what happens
+  // for windows, let the child process handle it
+  if (process.platform !== 'win32') {
+    forgeProcess.kill('SIGINT');
+  }
 });
 
 // Handle process exit
-forgeProcess.on('exit', (code) => {
-  // Only exit with code when the child actually exits
-  process.exit(code || 0);
+forgeProcess.on('exit', code => {
+  if (code !== null) {
+    process.exit(code);
+  }
 });

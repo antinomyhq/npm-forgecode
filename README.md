@@ -341,9 +341,9 @@ Define custom commands as shortcuts for repetitive prompts:
 ```yaml
 # forge.yaml
 commands:
-  - name: "refactor"
-    description: "Refactor selected code"
-    prompt: "Please refactor this code to improve readability and performance"
+  - name: 'refactor'
+    description: 'Refactor selected code'
+    prompt: 'Please refactor this code to improve readability and performance'
 ```
 
 </details>
@@ -355,7 +355,7 @@ Specify the default AI model to use for all agents in the workflow.
 
 ```yaml
 # forge.yaml
-model: "claude-3.7-sonnet"
+model: 'claude-3.7-sonnet'
 ```
 
 </details>
