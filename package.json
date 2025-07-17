@@ -1,6 +1,6 @@
 {
   "name": "forgecode",
-  "version": "0.100.1",
+  "version": "0.100.2",
   "description": "Code Forge CLI - an AI-powered coding assistant",
   "bin": {
     "forge": "forge.js"
