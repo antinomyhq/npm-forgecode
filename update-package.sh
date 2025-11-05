@@ -9,6 +9,7 @@ if [ "${DEBUG:-}" = "true" ]; then
   set -x
 fi
 
+
 VERSION=$1
 
 if [ -z "$VERSION" ]; then
@@ -74,8 +75,12 @@ download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/
 download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/forge-aarch64-pc-windows-msvc.exe" "bin/win32/arm64/forge-aarch64-pc-windows-msvc.exe"
 download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/forge-x86_64-pc-windows-msvc.exe" "bin/win32/x64/forge-x86_64-pc-windows-msvc.exe"
 
+# Android
+download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/forge-aarch64-linux-android" "bin/darwin/arm64/forge-aarch64-linux-android"
+
 # Make binaries executable
 chmod +x bin/darwin/arm64/forge-aarch64-apple-darwin
+chmod +x bin/darwin/arm64/forge-aarch64-linux-android
 chmod +x bin/darwin/x64/forge-x86_64-apple-darwin
 chmod +x bin/linux/arm64/forge-aarch64-unknown-linux-gnu
 chmod +x bin/linux/x64/forge-x86_64-unknown-linux-gnu
