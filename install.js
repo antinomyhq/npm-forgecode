@@ -125,6 +125,31 @@ function testBinary(binaryPath) {
   }
 }
 
+// Detect if running on Android (Termux or similar)
+function isAndroid() {
+  try {
+    // Check for Android-specific environment variables
+    if (process.env.ANDROID_ROOT || process.env.ANDROID_DATA) {
+      return true;
+    }
+
+    // Check if running in Termux
+    if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
+      return true;
+    }
+
+    // Check for Android-specific system properties
+    const { existsSync } = require('fs');
+    if (existsSync('/system/build.prop')) {
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    return false;
+  }
+}
+
 // Map of supported platforms and architectures to binary names
 const PLATFORMS = {
   darwin: {
@@ -139,6 +164,7 @@ const PLATFORMS = {
     arm64: {
       gnu: 'forge-aarch64-unknown-linux-gnu',
       musl: 'forge-aarch64-unknown-linux-musl',
+      android: 'forge-aarch64-linux-android',
     },
   },
   win32: {
@@ -164,6 +190,10 @@ function printPlatformInfo() {
   console.log(` - OS: ${os.type()} ${os.release()}`);
 
   if (platform === 'linux') {
+    if (isAndroid()) {
+      console.log(` - Environment: Android`);
+    }
+
     const libcInfo = getGlibcVersion();
     console.log(
       ` - Libc: ${libcInfo.type}${libcInfo.version ? ` version ${libcInfo.version}` : ''}`
@@ -221,41 +251,49 @@ function install() {
     binaryPath = join(__dirname, 'bin', actualPlatform, arch, binaryName);
   } else if (platform === 'linux') {
     // Linux: handle libc type detection
-    let libcType = detectLibcType();
+    // Check if running on Android first
+    if (isAndroid() && arch === 'arm64' && PLATFORMS[platform][arch]['android']) {
+      console.log('🤖 Android platform detected');
+      binaryName = PLATFORMS[platform][arch]['android'];
+      // Android binaries are stored in darwin/arm64 directory as per update-package.sh
+      binaryPath = join(__dirname, 'bin', 'darwin', 'arm64', binaryName);
+    } else {
+      let libcType = detectLibcType();
 
-    // Always try musl first if available (it's more portable)
-    const muslBinaryName = PLATFORMS[platform][arch]['musl'];
-    const muslBinaryPath = join(__dirname, 'bin', platform, arch, muslBinaryName);
+      // Always try musl first if available (it's more portable)
+      const muslBinaryName = PLATFORMS[platform][arch]['musl'];
+      const muslBinaryPath = join(__dirname, 'bin', platform, arch, muslBinaryName);
 
-    // Check if musl binary exists
-    if (existsSync(muslBinaryPath)) {
-      console.log('📦 Found musl binary, which should work on most Linux systems');
-      binaryName = muslBinaryName;
-      binaryPath = muslBinaryPath;
-    }
-    // Fall back to detected libc type
-    else {
-      // Check if the detected libc type is supported in our binaries
-      if (!PLATFORMS[platform][arch][libcType]) {
-        // If not supported, try the alternative
-        libcType = libcType === 'gnu' ? 'musl' : 'gnu';
-        console.warn(`⚠️  Detected libc type is not supported, trying ${libcType} instead`);
+      // Check if musl binary exists
+      if (existsSync(muslBinaryPath)) {
+        console.log('📦 Found musl binary, which should work on most Linux systems');
+        binaryName = muslBinaryName;
+        binaryPath = muslBinaryPath;
+      }
+      // Fall back to detected libc type
+      else {
+        // Check if the detected libc type is supported in our binaries
+        if (!PLATFORMS[platform][arch][libcType]) {
+          // If not supported, try the alternative
+          libcType = libcType === 'gnu' ? 'musl' : 'gnu';
+          console.warn(`⚠️  Detected libc type is not supported, trying ${libcType} instead`);
+        }
+
+        binaryName = PLATFORMS[platform][arch][libcType];
+        binaryPath = join(__dirname, 'bin', platform, arch, binaryName);
       }
 
-      binaryName = PLATFORMS[platform][arch][libcType];
-      binaryPath = join(__dirname, 'bin', platform, arch, binaryName);
-    }
+      // If binary doesn't exist, try the alternative
+      if (!existsSync(binaryPath)) {
+        const alternativeLibc = libcType === 'gnu' ? 'musl' : 'gnu';
+        const alternativeBinaryName = PLATFORMS[platform][arch][alternativeLibc];
+        const alternativeBinaryPath = join(__dirname, 'bin', platform, arch, alternativeBinaryName);
 
-    // If binary doesn't exist, try the alternative
-    if (!existsSync(binaryPath)) {
-      const alternativeLibc = libcType === 'gnu' ? 'musl' : 'gnu';
-      const alternativeBinaryName = PLATFORMS[platform][arch][alternativeLibc];
-      const alternativeBinaryPath = join(__dirname, 'bin', platform, arch, alternativeBinaryName);
-
-      if (existsSync(alternativeBinaryPath)) {
-        console.warn(`⚠️  Binary for ${libcType} not found, trying ${alternativeLibc} instead`);
-        binaryName = alternativeBinaryName;
-        binaryPath = alternativeBinaryPath;
+        if (existsSync(alternativeBinaryPath)) {
+          console.warn(`⚠️  Binary for ${libcType} not found, trying ${alternativeLibc} instead`);
+          binaryName = alternativeBinaryName;
+          binaryPath = alternativeBinaryPath;
+        }
       }
     }
   } else {

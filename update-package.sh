@@ -9,6 +9,7 @@ if [ "${DEBUG:-}" = "true" ]; then
   set -x
 fi
 
+
 VERSION=$1
 
 if [ -z "$VERSION" ]; then
@@ -80,6 +81,7 @@ download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/
 
 # Make binaries executable
 chmod +x bin/darwin/arm64/forge-aarch64-apple-darwin
+chmod +x bin/darwin/arm64/forge-aarch64-linux-android
 chmod +x bin/darwin/x64/forge-x86_64-apple-darwin
 chmod +x bin/linux/arm64/forge-aarch64-unknown-linux-gnu
 chmod +x bin/linux/x64/forge-x86_64-unknown-linux-gnu
