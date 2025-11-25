@@ -6,6 +6,26 @@ const { chmodSync, copyFileSync, existsSync } = require('fs');
 const { spawnSync } = require('child_process');
 const os = require('os');
 
+// Function to check if running on Android
+function isAndroid() {
+  try {
+    // Check for Android-specific system properties
+    const result = spawnSync('getprop', ['ro.build.version.release'], { encoding: 'utf8' });
+    if (result.status === 0 && result.stdout) {
+      return true;
+    }
+  } catch (e) {
+    // getprop command not available, probably not Android
+  }
+
+  // Check for Termux environment
+  if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
+    return true;
+  }
+
+  return false;
+}
+
 // Function to get the glibc version on Linux
 function getGlibcVersion() {
   try {
@@ -151,6 +171,9 @@ const PLATFORMS = {
     x64: 'forge-x86_64-pc-windows-msvc.exe',
     arm64: 'forge-aarch64-pc-windows-msvc.exe',
   },
+  android: {
+    arm64: 'forge-aarch64-linux-android',
+  }
 };
 
 // Platform-specific binary extension
@@ -194,18 +217,25 @@ function printPlatformInfo() {
 function install() {
   printPlatformInfo();
 
+  // Detect actual platform (override for Android)
+  let actualPlatform = platform;
+  if (platform === 'linux' && isAndroid()) {
+    actualPlatform = 'android';
+    console.log('🤖 Android environment detected, using Android binaries');
+  }
+
   // Check if platform is supported
-  if (!PLATFORMS[platform]) {
-    console.error(`❌ Unsupported platform: ${platform}`);
-    console.error('Supported platforms: macOS, Linux, Windows');
+  if (!PLATFORMS[actualPlatform]) {
+    console.error(`❌ Unsupported platform: ${actualPlatform}`);
+    console.error('Supported platforms: macOS, Linux, Windows, Android');
     process.exit(1);
   }
 
   // Check if architecture is supported
-  if (!PLATFORMS[platform][arch]) {
-    console.error(`❌ Unsupported architecture: ${arch} for platform ${platform}`);
+  if (!PLATFORMS[actualPlatform][arch]) {
+    console.error(`❌ Unsupported architecture: ${arch} for platform ${actualPlatform}`);
     console.error(
-      `Supported architectures for ${platform}: ${Object.keys(PLATFORMS[platform]).join(', ')}`
+      `Supported architectures for ${actualPlatform}: ${Object.keys(PLATFORMS[actualPlatform]).join(', ')}`
     );
     process.exit(1);
   }
@@ -214,8 +244,13 @@ function install() {
   let binaryPath;
   const targetPath = join(__dirname, 'forge' + getBinaryExtension());
 
-  // Handle Linux specially for libc type
-  if (platform === 'linux') {
+  // Handle platform-specific binary selection
+  if (actualPlatform === 'android') {
+    // Android: simple case, just one binary per arch
+    binaryName = PLATFORMS[actualPlatform][arch];
+    binaryPath = join(__dirname, 'bin', actualPlatform, arch, binaryName);
+  } else if (platform === 'linux') {
+    // Linux: handle libc type detection
     // Check if running on Android first
     if (isAndroid() && arch === 'arm64' && PLATFORMS[platform][arch]['android']) {
       console.log('🤖 Android platform detected');
@@ -262,8 +297,9 @@ function install() {
       }
     }
   } else {
-    binaryName = PLATFORMS[platform][arch];
-    binaryPath = join(__dirname, 'bin', platform, arch, binaryName);
+    // macOS, Windows: simple case
+    binaryName = PLATFORMS[actualPlatform][arch];
+    binaryPath = join(__dirname, 'bin', actualPlatform, arch, binaryName);
   }
 
   // Check if binary exists

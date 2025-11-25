@@ -43,6 +43,7 @@ mkdir -p bin/linux/arm64
 mkdir -p bin/linux/x64
 mkdir -p bin/win32/arm64
 mkdir -p bin/win32/x64
+mkdir -p bin/android/arm64
 
 # Download binaries from GitHub release
 echo "Downloading binaries for version $VERSION..."
@@ -76,7 +77,7 @@ download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/
 download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/forge-x86_64-pc-windows-msvc.exe" "bin/win32/x64/forge-x86_64-pc-windows-msvc.exe"
 
 # Android
-download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/forge-aarch64-linux-android" "bin/darwin/arm64/forge-aarch64-linux-android"
+download_binary "https://github.com/antinomyhq/forge/releases/download/$VERSION/forge-aarch64-linux-android" "bin/android/arm64/forge-aarch64-linux-android"
 
 # Make binaries executable
 chmod +x bin/darwin/arm64/forge-aarch64-apple-darwin
@@ -84,6 +85,8 @@ chmod +x bin/darwin/arm64/forge-aarch64-linux-android
 chmod +x bin/darwin/x64/forge-x86_64-apple-darwin
 chmod +x bin/linux/arm64/forge-aarch64-unknown-linux-gnu
 chmod +x bin/linux/x64/forge-x86_64-unknown-linux-gnu
+# Make Android binaries executable
+chmod +x bin/android/arm64/forge-aarch64-linux-android
 # Make musl binaries executable if they exist
 if [ -f bin/linux/arm64/forge-aarch64-unknown-linux-musl ]; then
     chmod +x bin/linux/arm64/forge-aarch64-unknown-linux-musl
