@@ -166,6 +166,10 @@ function getBinaryPath() {
   return binaryName ? buildBinaryPath(actualPlatform, arch, binaryName) : null;
 }
 
+// Export for testing
+module.exports = { getBinaryPath };
+
+/* istanbul ignore next */
 // Only run if not being required as a module (i.e., being executed directly)
 if (require.main === module) {
   const forgeBinaryPath = getBinaryPath();
@@ -199,7 +203,3 @@ if (require.main === module) {
     }
   });
 }
-
-
-// Export for testing
-module.exports = { getBinaryPath };

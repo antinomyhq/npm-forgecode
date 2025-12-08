@@ -324,4 +324,120 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
       expect(path).toContain('forge-x86_64-pc-windows-msvc.exe');
     });
   });
+
+  describe('Edge cases and error handling', () => {
+    test('should handle when ldd returns no version but getconf works', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockImplementation((cmd, args) => {
+        if (cmd === 'ldd') {
+          // ldd returns no version info
+          return createSpawnSyncResult(0, '', 'ldd');
+        }
+        if (cmd === 'getconf') {
+          // getconf returns version
+          return createSpawnSyncResult(0, 'glibc 2.35', '');
+        }
+        if (cmd === 'getprop') {
+          return createSpawnSyncResult(1, '', '');
+        }
+        return createSpawnSyncResult(1, '', '');
+      });
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('gnu');
+    });
+
+    test('should handle when ldd fails completely and fall back to musl', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockImplementation((cmd, args) => {
+        if (cmd === 'ldd') {
+          // ldd returns nothing useful
+          return createSpawnSyncResult(0, '', '');
+        }
+        if (cmd === 'getconf') {
+          // getconf also fails
+          return createSpawnSyncResult(1, '', '');
+        }
+        if (cmd === 'getprop') {
+          return createSpawnSyncResult(1, '', '');
+        }
+        return createSpawnSyncResult(1, '', '');
+      });
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      // Should fall back to musl when no version info available (safer default)
+      expect(forge.getBinaryPath()).toContain('musl');
+    });
+
+    test('should return null for unsupported platform', () => {
+      Object.defineProperty(process, 'platform', { value: 'freebsd', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockReturnValue(false);
+
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toBeNull();
+    });
+
+    test('should return null for unsupported architecture', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'ia32', writable: true, configurable: true });
+
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockReturnValue(false);
+
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toBeNull();
+    });
+
+    test('should handle getconf with no version match and fall back to musl', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockImplementation((cmd, args) => {
+        if (cmd === 'ldd') {
+          return createSpawnSyncResult(0, '', 'some text without version');
+        }
+        if (cmd === 'getconf') {
+          return createSpawnSyncResult(0, 'no version here', '');
+        }
+        if (cmd === 'getprop') {
+          return createSpawnSyncResult(1, '', '');
+        }
+        return createSpawnSyncResult(1, '', '');
+      });
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      // Should fall back to musl when version cannot be parsed (safer default)
+      expect(forge.getBinaryPath()).toContain('musl');
+    });
+
+    test('should handle spawnSync throwing error and default to gnu', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockImplementation((cmd, args) => {
+        if (cmd === 'ldd') {
+          throw new Error('Command not found');
+        }
+        if (cmd === 'getprop') {
+          return createSpawnSyncResult(1, '', '');
+        }
+        return createSpawnSyncResult(1, '', '');
+      });
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      // When error is caught, returns 'unknown' type which defaults to gnu
+      expect(forge.getBinaryPath()).toContain('gnu');
+    });
+  });
 });
