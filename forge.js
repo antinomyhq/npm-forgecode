@@ -119,7 +119,6 @@ const PLATFORMS = {
     arm64: {
       gnu: 'forge-aarch64-unknown-linux-gnu',
       musl: 'forge-aarch64-unknown-linux-musl',
-      android: 'forge-aarch64-linux-android',
     },
   },
   win32: {
