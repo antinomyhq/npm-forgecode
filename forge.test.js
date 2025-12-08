@@ -1,4 +1,5 @@
 // Mock modules
+const path = require('path');
 const mockSpawn = jest.fn();
 const mockSpawnSync = jest.fn();
 const mockExistsSync = jest.fn();
@@ -293,9 +294,10 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
       mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
       const forge = require('./forge.js');
-      const path = forge.getBinaryPath();
-      expect(path).toContain('bin/darwin/x64');
-      expect(path).toContain('forge-x86_64-apple-darwin');
+      const binaryPath = forge.getBinaryPath();
+      // Use path.join for OS-agnostic path comparison
+      expect(binaryPath).toContain(path.join('bin', 'darwin', 'x64'));
+      expect(binaryPath).toContain('forge-x86_64-apple-darwin');
     });
 
     test('should construct correct path for linux arm64', () => {
@@ -306,9 +308,10 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
       mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
       const forge = require('./forge.js');
-      const path = forge.getBinaryPath();
-      expect(path).toContain('bin/linux/arm64');
-      expect(path).toContain('forge-aarch64-unknown-linux-gnu');
+      const binaryPath = forge.getBinaryPath();
+      // Use path.join for OS-agnostic path comparison
+      expect(binaryPath).toContain(path.join('bin', 'linux', 'arm64'));
+      expect(binaryPath).toContain('forge-aarch64-unknown-linux-gnu');
     });
 
     test('should construct correct path for win32 x64', () => {
@@ -319,9 +322,10 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
       mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
       const forge = require('./forge.js');
-      const path = forge.getBinaryPath();
-      expect(path).toContain('bin/win32/x64');
-      expect(path).toContain('forge-x86_64-pc-windows-msvc.exe');
+      const binaryPath = forge.getBinaryPath();
+      // Use path.join for OS-agnostic path comparison
+      expect(binaryPath).toContain(path.join('bin', 'win32', 'x64'));
+      expect(binaryPath).toContain('forge-x86_64-pc-windows-msvc.exe');
     });
   });
 
