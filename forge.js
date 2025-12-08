@@ -166,33 +166,40 @@ function getBinaryPath() {
   return binaryName ? buildBinaryPath(actualPlatform, arch, binaryName) : null;
 }
 
-const forgeBinaryPath = getBinaryPath();
+// Only run if not being required as a module (i.e., being executed directly)
+if (require.main === module) {
+  const forgeBinaryPath = getBinaryPath();
 
-// Check if the binary exists
-if (!forgeBinaryPath || !existsSync(forgeBinaryPath)) {
-  console.error(`❌ Forge binary not found for platform: ${platform} (${arch})`);
-  console.error('Please check if your system is supported.');
-  process.exit(1);
+  // Check if the binary exists
+  if (!forgeBinaryPath || !existsSync(forgeBinaryPath)) {
+    console.error(`❌ Forge binary not found for platform: ${platform} (${arch})`);
+    console.error('Please check if your system is supported.');
+    process.exit(1);
+  }
+
+  // Configure spawn options
+  const spawnOptions = {
+    stdio: 'inherit',
+  };
+
+  // Spawn the forge process
+  const forgeProcess = spawn(forgeBinaryPath, process.argv.slice(2), spawnOptions);
+
+  // Handle SIGINT (Ctrl+C) based on platform
+  process.on('SIGINT', () => {
+    if (process.platform !== 'win32') {
+      forgeProcess.kill('SIGINT');
+    }
+  });
+
+  // Handle process exit
+  forgeProcess.on('exit', code => {
+    if (code !== null) {
+      process.exit(code);
+    }
+  });
 }
 
-// Configure spawn options
-const spawnOptions = {
-  stdio: 'inherit',
-};
 
-// Spawn the forge process
-const forgeProcess = spawn(forgeBinaryPath, process.argv.slice(2), spawnOptions);
-
-// Handle SIGINT (Ctrl+C) based on platform
-process.on('SIGINT', () => {
-  if (process.platform !== 'win32') {
-    forgeProcess.kill('SIGINT');
-  }
-});
-
-// Handle process exit
-forgeProcess.on('exit', code => {
-  if (code !== null) {
-    process.exit(code);
-  }
-});
+// Export for testing
+module.exports = { getBinaryPath };

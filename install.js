@@ -1,50 +1,33 @@
 #!/usr/bin/env node
 
 const { platform, arch } = process;
-const { spawnSync } = require('child_process');
-const { existsSync } = require('fs');
 
-// Note: This script now only checks for compatibility.
-// It does NOT copy the binary, to avoid permission issues during npm install.
-// The forge.js entry point now resolves the correct binary at runtime.
+// Note: This script only performs a basic compatibility check.
+// All platform/architecture detection happens at runtime in forge.js
+// to avoid permission issues during npm install.
 
-// Function to check if running on Android
-function isAndroid() {
-  try {
-    const result = spawnSync('getprop', ['ro.build.version.release'], { encoding: 'utf8' });
-    if (result.status === 0 && result.stdout) return true;
-  } catch (e) {}
-  if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) return true;
-  if (process.env.ANDROID_ROOT || process.env.ANDROID_DATA) return true;
-  try {
-     if (existsSync('/system/build.prop')) return true;
-  } catch(e) {}
-  return false;
-}
-
-const PLATFORMS = {
-  darwin: { x64: true, arm64: true },
-  linux: { x64: true, arm64: true },
-  win32: { x64: true, arm64: true },
-  android: { arm64: true }
+const SUPPORTED_PLATFORMS = {
+  darwin: ['x64', 'arm64'],
+  linux: ['x64', 'arm64'],
+  win32: ['x64', 'arm64'],
+  android: ['arm64']
 };
 
 function install() {
-  // Simple compatibility check
-  let actualPlatform = platform;
-  if (platform === 'linux' && isAndroid()) {
-    actualPlatform = 'android';
-  }
+  console.log(`📦 Installing forge for ${platform}/${arch}...`);
 
-  if (!PLATFORMS[actualPlatform]) {
-    console.warn(`⚠️  Warning: Platform '${actualPlatform}' might not be supported.`);
-  } else if (!PLATFORMS[actualPlatform][arch]) {
-    console.warn(`⚠️  Warning: Architecture '${arch}' on '${actualPlatform}' might not be supported.`);
+  // Basic platform check
+  if (!SUPPORTED_PLATFORMS[platform]) {
+    console.warn(`⚠️  Warning: Platform '${platform}' might not be supported.`);
+    console.warn('Supported platforms: darwin, linux, win32');
+  } else if (!SUPPORTED_PLATFORMS[platform].includes(arch)) {
+    console.warn(`⚠️  Warning: Architecture '${arch}' on '${platform}' might not be supported.`);
+    console.warn(`Supported architectures for ${platform}: ${SUPPORTED_PLATFORMS[platform].join(', ')}`);
   } else {
-    console.log(`✅ System appears compatible: ${actualPlatform}/${arch}`);
+    console.log(`✅ System compatible: ${platform}/${arch}`);
   }
   
-  console.log("Forge installed successfully. Run 'forge' to start.");
+  console.log("✨ Forge installed successfully. Run 'forge' to start.");
 }
 
 install();
