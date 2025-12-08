@@ -131,6 +131,11 @@ const PLATFORMS = {
   }
 };
 
+// Helper function to construct binary path
+function buildBinaryPath(platformDir, archDir, binaryName) {
+  return join(__dirname, 'bin', platformDir, archDir, binaryName);
+}
+
 // Determine the path to the correct binary
 function getBinaryPath() {
   // Check for override
@@ -139,49 +144,26 @@ function getBinaryPath() {
   }
 
   // Detect actual platform (override for Android)
-  let actualPlatform = platform;
-  if (platform === 'linux' && isAndroid()) {
-    actualPlatform = 'android';
-  }
+  const isAndroidEnv = platform === 'linux' && isAndroid();
+  const actualPlatform = isAndroidEnv ? 'android' : platform;
 
-  // Handle platform-specific binary selection
+  // Handle Android
   if (actualPlatform === 'android') {
-    const binaryName = PLATFORMS.android[arch];
-    if (binaryName) {
-        return join(__dirname, 'bin', 'android', 'arm64', binaryName);
-    }
-  } 
-  else if (platform === 'linux') {
-    // Linux: handle libc type detection
-    
-    // Check for Android first (if actualPlatform wasn't set to android but environment suggests it)
-    if (isAndroid() && arch === 'arm64' && PLATFORMS[platform][arch]['android']) {
-      const binaryName = PLATFORMS[platform][arch]['android'];
-      return join(__dirname, 'bin', 'darwin', 'arm64', binaryName);
-    }
-    
-    // Check for environment variable to force musl
-    let forceMusl = process.env.FORCE_MUSL === '1';
-    
-    let libcType = forceMusl ? 'musl' : detectLibcType();
-    
-    // Safety check for libcType
-    if (!libcType) libcType = 'gnu';
-
-    const binaryName = PLATFORMS[platform][arch]?.[libcType];
-    if (binaryName) {
-        return join(__dirname, 'bin', platform, arch, binaryName);
-    }
-  } 
-  else {
-    // macOS, Windows
-    const binaryName = PLATFORMS[actualPlatform]?.[arch];
-    if (binaryName) {
-        return join(__dirname, 'bin', actualPlatform, arch, binaryName);
-    }
+    const binaryName = PLATFORMS.android?.[arch];
+    return binaryName ? buildBinaryPath('android', arch, binaryName) : null;
   }
 
-  return null;
+  // Handle Linux with libc detection
+  if (platform === 'linux') {
+    const forceMusl = process.env.FORCE_MUSL === '1';
+    const libcType = forceMusl ? 'musl' : (detectLibcType() || 'gnu');
+    const binaryName = PLATFORMS.linux?.[arch]?.[libcType];
+    return binaryName ? buildBinaryPath(platform, arch, binaryName) : null;
+  }
+
+  // Handle macOS and Windows
+  const binaryName = PLATFORMS[actualPlatform]?.[arch];
+  return binaryName ? buildBinaryPath(actualPlatform, arch, binaryName) : null;
 }
 
 const forgeBinaryPath = getBinaryPath();
