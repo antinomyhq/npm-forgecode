@@ -1,26 +1,199 @@
 #!/usr/bin/env node
 
 const { join } = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { existsSync } = require('fs');
+const os = require('os');
+const { platform, arch } = process;
 
-// Get the correct binary extension based on platform
-const getBinaryExtension = () => {
-  return process.platform === 'win32' ? '.exe' : '';
+// Function to check if running on Android
+function isAndroid() {
+  try {
+    // Check for Android-specific system properties
+    const result = spawnSync('getprop', ['ro.build.version.release'], { encoding: 'utf8' });
+    if (result.status === 0 && result.stdout) {
+      return true;
+    }
+  } catch (e) {
+    // getprop command not available, probably not Android
+  }
+
+  // Check for Termux environment
+  if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
+    return true;
+  }
+  
+  // Check for Android-specific environment variables
+  if (process.env.ANDROID_ROOT || process.env.ANDROID_DATA) {
+    return true;
+  }
+
+  // Check for Android-specific system properties
+  if (existsSync('/system/build.prop')) {
+    return true;
+  }
+
+  return false;
+}
+
+// Function to get the glibc version on Linux
+function getGlibcVersion() {
+  try {
+    // Using ldd to get version info (common on most Linux distros)
+    const lddOutput =
+      spawnSync('ldd', ['--version'], { encoding: 'utf8' }).stderr.toString() ||
+      spawnSync('ldd', ['--version'], { encoding: 'utf8' }).stdout.toString();
+
+    // Check if this is musl libc
+    if (lddOutput.toLowerCase().includes('musl')) {
+      return { type: 'musl', version: null };
+    }
+
+    // Extract glibc version using regex
+    const versionMatch = /\b(\d+\.\d+)\b/.exec(lddOutput);
+    if (versionMatch && versionMatch[1]) {
+      return { type: 'gnu', version: versionMatch[1] };
+    }
+
+    // Alternative method using GNU-specific getconf
+    try {
+      const getconfOutput = spawnSync('getconf', ['GNU_LIBC_VERSION'], {
+        encoding: 'utf8',
+      }).stdout.toString();
+      const getconfMatch = /\b(\d+\.\d+)\b/.exec(getconfOutput);
+      if (getconfMatch && getconfMatch[1]) {
+        return { type: 'gnu', version: getconfMatch[1] };
+      }
+    } catch (e) {
+      // Ignore error if getconf is not available
+    }
+
+    // If we got here, we couldn't get the specific version
+    return { type: 'gnu', version: null };
+  } catch (error) {
+    return { type: 'unknown', version: null };
+  }
+}
+
+// Check if the glibc version is sufficient for our binary
+function isGlibcVersionSufficient(version) {
+  if (!version) return false;
+
+  // Our binary requires 2.32 or higher
+  const requiredVersion = 2.32;
+  const currentVersion = parseFloat(version);
+
+  return currentVersion >= requiredVersion;
+}
+
+// Enhanced libc detection for Linux
+function detectLibcType() {
+  if (platform !== 'linux') {
+    return null; // Not relevant for non-Linux platforms
+  }
+
+  const libcInfo = getGlibcVersion();
+
+  // If it's musl, or if it's an older glibc version, prefer musl
+  if (
+    libcInfo.type === 'musl' ||
+    (libcInfo.type === 'gnu' && !isGlibcVersionSufficient(libcInfo.version))
+  ) {
+    return 'musl';
+  }
+
+  return 'gnu';
+}
+
+// Map of supported platforms and architectures to binary names
+const PLATFORMS = {
+  darwin: {
+    x64: 'forge-x86_64-apple-darwin',
+    arm64: 'forge-aarch64-apple-darwin',
+  },
+  linux: {
+    x64: {
+      gnu: 'forge-x86_64-unknown-linux-gnu',
+      musl: 'forge-x86_64-unknown-linux-musl',
+    },
+    arm64: {
+      gnu: 'forge-aarch64-unknown-linux-gnu',
+      musl: 'forge-aarch64-unknown-linux-musl',
+      android: 'forge-aarch64-linux-android',
+    },
+  },
+  win32: {
+    x64: 'forge-x86_64-pc-windows-msvc.exe',
+    arm64: 'forge-aarch64-pc-windows-msvc.exe',
+  },
+  android: {
+    arm64: 'forge-aarch64-linux-android',
+  }
 };
 
-// Get the path to the forge binary in the same directory as this script
-const forgeBinaryPath = join(__dirname, 'forge' + getBinaryExtension());
+// Determine the path to the correct binary
+function getBinaryPath() {
+  // Check for override
+  if (process.env.FORGE_BINARY_PATH) {
+    return process.env.FORGE_BINARY_PATH;
+  }
+
+  // Detect actual platform (override for Android)
+  let actualPlatform = platform;
+  if (platform === 'linux' && isAndroid()) {
+    actualPlatform = 'android';
+  }
+
+  // Handle platform-specific binary selection
+  if (actualPlatform === 'android') {
+    const binaryName = PLATFORMS.android[arch];
+    if (binaryName) {
+        return join(__dirname, 'bin', 'android', 'arm64', binaryName);
+    }
+  } 
+  else if (platform === 'linux') {
+    // Linux: handle libc type detection
+    
+    // Check for Android first (if actualPlatform wasn't set to android but environment suggests it)
+    if (isAndroid() && arch === 'arm64' && PLATFORMS[platform][arch]['android']) {
+      const binaryName = PLATFORMS[platform][arch]['android'];
+      return join(__dirname, 'bin', 'darwin', 'arm64', binaryName);
+    }
+    
+    // Check for environment variable to force musl
+    let forceMusl = process.env.FORCE_MUSL === '1';
+    
+    let libcType = forceMusl ? 'musl' : detectLibcType();
+    
+    // Safety check for libcType
+    if (!libcType) libcType = 'gnu';
+
+    const binaryName = PLATFORMS[platform][arch]?.[libcType];
+    if (binaryName) {
+        return join(__dirname, 'bin', platform, arch, binaryName);
+    }
+  } 
+  else {
+    // macOS, Windows
+    const binaryName = PLATFORMS[actualPlatform]?.[arch];
+    if (binaryName) {
+        return join(__dirname, 'bin', actualPlatform, arch, binaryName);
+    }
+  }
+
+  return null;
+}
+
+const forgeBinaryPath = getBinaryPath();
 
 // Check if the binary exists
-if (!existsSync(forgeBinaryPath)) {
-  console.error(`❌ Forge binary not found at: ${forgeBinaryPath}`);
-  console.error('Please try reinstalling the package with: npm install -g forgecode');
-  console.error(`System information: ${process.platform} (${process.arch})`);
+if (!forgeBinaryPath || !existsSync(forgeBinaryPath)) {
+  console.error(`❌ Forge binary not found for platform: ${platform} (${arch})`);
+  console.error('Please check if your system is supported.');
   process.exit(1);
 }
 
-// Configure spawn options based on platform
+// Configure spawn options
 const spawnOptions = {
   stdio: 'inherit',
 };
@@ -30,7 +203,6 @@ const forgeProcess = spawn(forgeBinaryPath, process.argv.slice(2), spawnOptions)
 
 // Handle SIGINT (Ctrl+C) based on platform
 process.on('SIGINT', () => {
-  // for windows, let the child process handle it
   if (process.platform !== 'win32') {
     forgeProcess.kill('SIGINT');
   }
