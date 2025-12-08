@@ -6,24 +6,29 @@ const { chmodSync, copyFileSync, existsSync } = require('fs');
 const { spawnSync } = require('child_process');
 const os = require('os');
 
-// Function to check if running on Android
+// Function to check if running on Android (Termux or similar)
 function isAndroid() {
   try {
-    // Check for Android-specific system properties
-    const result = spawnSync('getprop', ['ro.build.version.release'], { encoding: 'utf8' });
-    if (result.status === 0 && result.stdout) {
+    // Check for Android-specific environment variables
+    if (process.env.ANDROID_ROOT || process.env.ANDROID_DATA) {
       return true;
     }
-  } catch (e) {
-    // getprop command not available, probably not Android
-  }
 
-  // Check for Termux environment
-  if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
-    return true;
-  }
+    // Check if running in Termux
+    if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
+      return true;
+    }
 
-  return false;
+    // Check for Android-specific system properties
+    const { existsSync } = require('fs');
+    if (existsSync('/system/build.prop')) {
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    return false;
+  }
 }
 
 // Function to get the glibc version on Linux
@@ -121,31 +126,6 @@ function testBinary(binaryPath) {
     return false;
   } catch (error) {
     console.warn(`⚠️  Binary test failed: ${error.message}`);
-    return false;
-  }
-}
-
-// Detect if running on Android (Termux or similar)
-function isAndroid() {
-  try {
-    // Check for Android-specific environment variables
-    if (process.env.ANDROID_ROOT || process.env.ANDROID_DATA) {
-      return true;
-    }
-
-    // Check if running in Termux
-    if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
-      return true;
-    }
-
-    // Check for Android-specific system properties
-    const { existsSync } = require('fs');
-    if (existsSync('/system/build.prop')) {
-      return true;
-    }
-
-    return false;
-  } catch (error) {
     return false;
   }
 }
