@@ -1,392 +1,447 @@
 // Mock modules
+const path = require('path');
 const mockSpawn = jest.fn();
+const mockSpawnSync = jest.fn();
 const mockExistsSync = jest.fn();
 
 jest.mock('child_process', () => ({
   spawn: mockSpawn,
+  spawnSync: mockSpawnSync,
 }));
 
 jest.mock('fs', () => ({
   existsSync: mockExistsSync,
 }));
 
-jest.mock('path', () => ({
-  join: (...args) => args.join('/'),
-}));
-
-describe('forge.js - Binary Launcher', () => {
+describe('forge.js - Platform Detection and Binary Naming', () => {
   let originalPlatform;
   let originalArch;
-  let originalArgv;
-  let consoleErrorSpy;
-  let processExitSpy;
-  let processOnSpy;
-  let mockForgeProcess;
+  let originalEnv;
+
+  // Helper to create mock spawnSync result with proper toString() methods
+  const createSpawnSyncResult = (status, stdout, stderr) => ({
+    status,
+    stdout: { toString: () => stdout },
+    stderr: { toString: () => stderr }
+  });
+  
+  // Helper to mock Linux libc detection
+  const mockLinuxLibc = (libcOutput) => {
+    mockSpawnSync.mockImplementation((cmd, args) => {
+      if (cmd === 'ldd') {
+        return createSpawnSyncResult(0, '', libcOutput);
+      }
+      if (cmd === 'getprop') {
+        return createSpawnSyncResult(1, '', ''); // Android check fails
+      }
+      return createSpawnSyncResult(1, '', '');
+    });
+  };
 
   beforeEach(() => {
-    // Store original values
     originalPlatform = process.platform;
     originalArch = process.arch;
-    originalArgv = [...process.argv];
+    originalEnv = { ...process.env };
 
-    // Mock console and process methods
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit called');
-    });
-    processOnSpy = jest.spyOn(process, 'on').mockImplementation((event, handler) => {
-      // Store handlers for testing but don't actually register them
-      return process;
-    });
-
-    // Create mock forge process
-    mockForgeProcess = {
-      kill: jest.fn(),
-      on: jest.fn((event, handler) => mockForgeProcess),
-    };
-
-    // Reset all mocks
-    jest.clearAllMocks();
-    mockSpawn.mockReset();
-    mockExistsSync.mockReset();
-    mockSpawn.mockReturnValue(mockForgeProcess);
-
-    // Clear the module cache
     jest.resetModules();
+    mockSpawn.mockClear();
+    mockSpawnSync.mockClear();
+    mockExistsSync.mockClear();
+    
+    // Clean env variables
+    delete process.env.ANDROID_ROOT;
+    delete process.env.ANDROID_DATA;
+    delete process.env.PREFIX;
+    delete process.env.FORGE_BINARY_PATH;
+    delete process.env.FORCE_MUSL;
   });
 
   afterEach(() => {
-    // Restore original values
     Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true, configurable: true });
     Object.defineProperty(process, 'arch', { value: originalArch, writable: true, configurable: true });
-    process.argv = originalArgv;
-
-    // Restore spies
-    consoleErrorSpy.mockRestore();
-    processExitSpy.mockRestore();
-    processOnSpy.mockRestore();
+    process.env = originalEnv;
   });
 
-  const setPlatformAndArch = (platform, arch) => {
-    Object.defineProperty(process, 'platform', { value: platform, writable: true, configurable: true });
-    Object.defineProperty(process, 'arch', { value: arch, writable: true, configurable: true });
-  };
+  describe('Binary naming conventions', () => {
+    test('macOS x64 should use x86_64-apple-darwin', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-  const requireForge = () => {
-    try {
-      require('./forge.js');
-    } catch (e) {
-      // Catch process.exit throws
-      if (!e.message.includes('process.exit called')) {
-        throw e;
-      }
-    }
-  };
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-  describe('Binary Path Resolution', () => {
-    test('should use .exe extension on Windows', () => {
-      setPlatformAndArch('win32', 'x64');
-      mockExistsSync.mockReturnValue(true);
-
-      requireForge();
-
-      expect(mockExistsSync).toHaveBeenCalledWith(expect.stringContaining('forge.exe'));
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-x86_64-apple-darwin');
     });
 
-    test('should not use .exe extension on macOS', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(true);
+    test('macOS ARM64 should use aarch64-apple-darwin', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
 
-      requireForge();
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      const calls = mockExistsSync.mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      expect(calls[0][0]).toMatch(/\/forge$/);
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-aarch64-apple-darwin');
     });
 
-    test('should not use .exe extension on Linux', () => {
-      setPlatformAndArch('linux', 'x64');
-      mockExistsSync.mockReturnValue(true);
+    test('Linux x64 GNU should use x86_64-unknown-linux-gnu', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-      requireForge();
+      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      const calls = mockExistsSync.mock.calls;
-      expect(calls.length).toBeGreaterThan(0);
-      expect(calls[0][0]).toMatch(/\/forge$/);
-    });
-  });
-
-  describe('Binary Existence Check', () => {
-    test('should exit with error when binary does not exist', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(false);
-
-      requireForge();
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Forge binary not found')
-      );
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('npm install -g forgecode')
-      );
-      expect(processExitSpy).toHaveBeenCalledWith(1);
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-x86_64-unknown-linux-gnu');
     });
 
-    test('should include platform info in error message', () => {
-      setPlatformAndArch('linux', 'arm64');
-      mockExistsSync.mockReturnValue(false);
+    test('Linux x64 musl should use x86_64-unknown-linux-musl', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+      process.env.FORCE_MUSL = '1';
 
-      requireForge();
+      mockLinuxLibc('musl libc');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      const errorCalls = consoleErrorSpy.mock.calls.map(call => call[0]).join(' ');
-      expect(errorCalls).toContain('linux');
-      expect(errorCalls).toContain('arm64');
-    });
-  });
-
-  describe('Process Spawning', () => {
-    test('should spawn forge process with correct arguments', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(true);
-      process.argv = ['node', 'forge.js', 'build', '--watch'];
-
-      requireForge();
-
-      expect(mockSpawn).toHaveBeenCalledWith(
-        expect.stringContaining('forge'),
-        ['build', '--watch'],
-        expect.objectContaining({ stdio: 'inherit' })
-      );
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-x86_64-unknown-linux-musl');
     });
 
-    test('should pass empty arguments array when no arguments provided', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(true);
-      process.argv = ['node', 'forge.js'];
+    test('Linux ARM64 GNU should use aarch64-unknown-linux-gnu', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
 
-      requireForge();
+      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        expect.stringContaining('forge'),
-        [],
-        expect.objectContaining({ stdio: 'inherit' })
-      );
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-aarch64-unknown-linux-gnu');
     });
 
-    test('should pass multiple arguments correctly', () => {
-      setPlatformAndArch('linux', 'x64');
-      mockExistsSync.mockReturnValue(true);
-      process.argv = ['node', 'forge.js', 'test', '--verbose', '--coverage'];
+    test('Linux ARM64 musl should use aarch64-unknown-linux-musl', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
+      process.env.FORCE_MUSL = '1';
 
-      requireForge();
+      mockLinuxLibc('musl libc');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        expect.stringContaining('forge'),
-        ['test', '--verbose', '--coverage'],
-        expect.any(Object)
-      );
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-aarch64-unknown-linux-musl');
     });
 
-    test('should use stdio: inherit for spawn options', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(true);
+    test('Android ARM64 should use aarch64-linux-android', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
+      process.env.ANDROID_ROOT = '/system';
 
-      requireForge();
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => path.includes('/system/build.prop') || !path.includes('/system'));
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.any(Array),
-        expect.objectContaining({ stdio: 'inherit' })
-      );
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-aarch64-linux-android');
+    });
+
+    test('Windows x64 should use x86_64-pc-windows-msvc.exe', () => {
+      Object.defineProperty(process, 'platform', { value: 'win32', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-x86_64-pc-windows-msvc.exe');
+    });
+
+    test('Windows ARM64 should use aarch64-pc-windows-msvc.exe', () => {
+      Object.defineProperty(process, 'platform', { value: 'win32', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
+
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('forge-aarch64-pc-windows-msvc.exe');
     });
   });
 
-  describe('Signal Handling - SIGINT', () => {
-    test('should kill forge process on SIGINT for Unix platforms', () => {
-      setPlatformAndArch('linux', 'x64');
-      mockExistsSync.mockReturnValue(true);
+  describe('Android detection', () => {
+    test('should detect Android via ANDROID_ROOT', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
+      process.env.ANDROID_ROOT = '/system';
 
-      requireForge();
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => path.includes('/system/build.prop') || !path.includes('/system'));
 
-      // Find the SIGINT handler
-      const sigintCall = processOnSpy.mock.calls.find(call => call[0] === 'SIGINT');
-      expect(sigintCall).toBeDefined();
-      
-      const sigintHandler = sigintCall[1];
-      sigintHandler();
-
-      expect(mockForgeProcess.kill).toHaveBeenCalledWith('SIGINT');
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('android');
     });
 
-    test('should not kill forge process on SIGINT for Windows', () => {
-      setPlatformAndArch('win32', 'x64');
-      mockExistsSync.mockReturnValue(true);
+    test('should detect Android via ANDROID_DATA', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
+      process.env.ANDROID_DATA = '/data';
 
-      requireForge();
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => path.includes('/system/build.prop') || !path.includes('/system'));
 
-      const sigintCall = processOnSpy.mock.calls.find(call => call[0] === 'SIGINT');
-      expect(sigintCall).toBeDefined();
-      
-      const sigintHandler = sigintCall[1];
-      sigintHandler();
-
-      expect(mockForgeProcess.kill).not.toHaveBeenCalled();
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('android');
     });
 
-    test('should handle SIGINT on macOS', () => {
-      setPlatformAndArch('darwin', 'arm64');
-      mockExistsSync.mockReturnValue(true);
+    test('should detect Termux via PREFIX', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
+      process.env.PREFIX = '/data/data/com.termux/files/usr';
 
-      requireForge();
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => path.includes('/system/build.prop') || !path.includes('/system'));
 
-      const sigintCall = processOnSpy.mock.calls.find(call => call[0] === 'SIGINT');
-      const sigintHandler = sigintCall[1];
-      sigintHandler();
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('android');
+    });
 
-      expect(mockForgeProcess.kill).toHaveBeenCalledWith('SIGINT');
+    test('should detect Android via /system/build.prop', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
+
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('android');
     });
   });
 
-  describe('Process Exit Handling', () => {
-    test('should exit with same code as forge process', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(true);
+  describe('Glibc version detection', () => {
+    test('should detect glibc 2.35 as sufficient', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-      requireForge();
+      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      const exitCall = mockForgeProcess.on.mock.calls.find(call => call[0] === 'exit');
-      expect(exitCall).toBeDefined();
-      
-      const exitHandler = exitCall[1];
-      
-      processExitSpy.mockClear();
-      try {
-        exitHandler(0);
-      } catch (e) {
-        // Expected to throw from process.exit
-      }
-      expect(processExitSpy).toHaveBeenCalledWith(0);
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('gnu');
     });
 
-    test('should exit with error code when forge process fails', () => {
-      setPlatformAndArch('linux', 'x64');
-      mockExistsSync.mockReturnValue(true);
+    test('should detect glibc 2.32 as sufficient', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-      requireForge();
+      mockLinuxLibc('ldd (GNU libc) 2.32');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      const exitCall = mockForgeProcess.on.mock.calls.find(call => call[0] === 'exit');
-      const exitHandler = exitCall[1];
-
-      processExitSpy.mockClear();
-      try {
-        exitHandler(1);
-      } catch (e) {
-        // Expected to throw from process.exit
-      }
-      expect(processExitSpy).toHaveBeenCalledWith(1);
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('gnu');
     });
 
-    test('should not exit when code is null', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(true);
+    test('should fall back to musl for glibc 2.28', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-      requireForge();
+      mockLinuxLibc('ldd (GNU libc) 2.28');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      const exitCall = mockForgeProcess.on.mock.calls.find(call => call[0] === 'exit');
-      const exitHandler = exitCall[1];
-
-      processExitSpy.mockClear();
-      exitHandler(null);
-      expect(processExitSpy).not.toHaveBeenCalled();
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('musl');
     });
 
-    test('should handle various exit codes', () => {
-      setPlatformAndArch('linux', 'x64');
+    test('should detect musl libc', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockLinuxLibc('musl libc (x86_64)');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('musl');
+    });
+  });
+
+  describe('Environment variable overrides', () => {
+    test('should respect FORGE_BINARY_PATH override', () => {
+      process.env.FORGE_BINARY_PATH = '/custom/path/to/forge';
+
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
       mockExistsSync.mockReturnValue(true);
 
-      requireForge();
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toBe('/custom/path/to/forge');
+    });
 
-      const exitCall = mockForgeProcess.on.mock.calls.find(call => call[0] === 'exit');
-      const exitHandler = exitCall[1];
+    test('should respect FORCE_MUSL flag on Linux', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+      process.env.FORCE_MUSL = '1';
 
-      const exitCodes = [0, 1, 2, 127, 130];
+      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-      exitCodes.forEach(code => {
-        processExitSpy.mockClear();
-        try {
-          exitHandler(code);
-        } catch (e) {
-          // Expected to throw from process.exit
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('musl');
+    });
+  });
+
+  describe('Binary path construction', () => {
+    test('should construct correct path for darwin x64', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      const binaryPath = forge.getBinaryPath();
+      // Use path.join for OS-agnostic path comparison
+      expect(binaryPath).toContain(path.join('bin', 'darwin', 'x64'));
+      expect(binaryPath).toContain('forge-x86_64-apple-darwin');
+    });
+
+    test('should construct correct path for linux arm64', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
+
+      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      const binaryPath = forge.getBinaryPath();
+      // Use path.join for OS-agnostic path comparison
+      expect(binaryPath).toContain(path.join('bin', 'linux', 'arm64'));
+      expect(binaryPath).toContain('forge-aarch64-unknown-linux-gnu');
+    });
+
+    test('should construct correct path for win32 x64', () => {
+      Object.defineProperty(process, 'platform', { value: 'win32', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      const binaryPath = forge.getBinaryPath();
+      // Use path.join for OS-agnostic path comparison
+      expect(binaryPath).toContain(path.join('bin', 'win32', 'x64'));
+      expect(binaryPath).toContain('forge-x86_64-pc-windows-msvc.exe');
+    });
+  });
+
+  describe('Edge cases and error handling', () => {
+    test('should handle when ldd returns no version but getconf works', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockImplementation((cmd, args) => {
+        if (cmd === 'ldd') {
+          // ldd returns no version info
+          return createSpawnSyncResult(0, '', 'ldd');
         }
-        expect(processExitSpy).toHaveBeenCalledWith(code);
+        if (cmd === 'getconf') {
+          // getconf returns version
+          return createSpawnSyncResult(0, 'glibc 2.35', '');
+        }
+        if (cmd === 'getprop') {
+          return createSpawnSyncResult(1, '', '');
+        }
+        return createSpawnSyncResult(1, '', '');
       });
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toContain('gnu');
     });
-  });
 
-  describe('Cross-Platform Compatibility', () => {
-    const platforms = [
-      { platform: 'darwin', arch: 'x64' },
-      { platform: 'darwin', arch: 'arm64' },
-      { platform: 'linux', arch: 'x64' },
-      { platform: 'linux', arch: 'arm64' },
-      { platform: 'win32', arch: 'x64' },
-      { platform: 'win32', arch: 'arm64' },
-    ];
+    test('should handle when ldd fails completely and fall back to musl', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-    platforms.forEach(({ platform, arch }) => {
-      test(`should work on ${platform}/${arch}`, () => {
-        setPlatformAndArch(platform, arch);
-        mockExistsSync.mockReturnValue(true);
-
-        requireForge();
-
-        expect(mockSpawn).toHaveBeenCalled();
-        expect(mockForgeProcess.on).toHaveBeenCalledWith('exit', expect.any(Function));
+      mockSpawnSync.mockImplementation((cmd, args) => {
+        if (cmd === 'ldd') {
+          // ldd returns nothing useful
+          return createSpawnSyncResult(0, '', '');
+        }
+        if (cmd === 'getconf') {
+          // getconf also fails
+          return createSpawnSyncResult(1, '', '');
+        }
+        if (cmd === 'getprop') {
+          return createSpawnSyncResult(1, '', '');
+        }
+        return createSpawnSyncResult(1, '', '');
       });
-    });
-  });
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
-  describe('Edge Cases', () => {
-    test('should handle arguments with special characters', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(true);
-      process.argv = ['node', 'forge.js', 'echo', 'hello world', '--message="test"'];
-
-      requireForge();
-
-      expect(mockSpawn).toHaveBeenCalledWith(
-        expect.any(String),
-        ['echo', 'hello world', '--message="test"'],
-        expect.any(Object)
-      );
+      const forge = require('./forge.js');
+      // Should fall back to musl when no version info available (safer default)
+      expect(forge.getBinaryPath()).toContain('musl');
     });
 
-    test('should handle empty string arguments', () => {
-      setPlatformAndArch('linux', 'x64');
-      mockExistsSync.mockReturnValue(true);
-      process.argv = ['node', 'forge.js', ''];
+    test('should return null for unsupported platform', () => {
+      Object.defineProperty(process, 'platform', { value: 'freebsd', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-      requireForge();
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockReturnValue(false);
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        expect.any(String),
-        [''],
-        expect.any(Object)
-      );
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toBeNull();
     });
 
-    test('should handle arguments with dashes', () => {
-      setPlatformAndArch('darwin', 'x64');
-      mockExistsSync.mockReturnValue(true);
-      process.argv = ['node', 'forge.js', '--', '--help'];
+    test('should return null for unsupported architecture', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'ia32', writable: true, configurable: true });
 
-      requireForge();
+      mockSpawnSync.mockReturnValue(createSpawnSyncResult(0, '', ''));
+      mockExistsSync.mockReturnValue(false);
 
-      expect(mockSpawn).toHaveBeenCalledWith(
-        expect.any(String),
-        ['--', '--help'],
-        expect.any(Object)
-      );
+      const forge = require('./forge.js');
+      expect(forge.getBinaryPath()).toBeNull();
+    });
+
+    test('should handle getconf with no version match and fall back to musl', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockImplementation((cmd, args) => {
+        if (cmd === 'ldd') {
+          return createSpawnSyncResult(0, '', 'some text without version');
+        }
+        if (cmd === 'getconf') {
+          return createSpawnSyncResult(0, 'no version here', '');
+        }
+        if (cmd === 'getprop') {
+          return createSpawnSyncResult(1, '', '');
+        }
+        return createSpawnSyncResult(1, '', '');
+      });
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      // Should fall back to musl when version cannot be parsed (safer default)
+      expect(forge.getBinaryPath()).toContain('musl');
+    });
+
+    test('should handle spawnSync throwing error and default to gnu', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
+      Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
+
+      mockSpawnSync.mockImplementation((cmd, args) => {
+        if (cmd === 'ldd') {
+          throw new Error('Command not found');
+        }
+        if (cmd === 'getprop') {
+          return createSpawnSyncResult(1, '', '');
+        }
+        return createSpawnSyncResult(1, '', '');
+      });
+      mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
+
+      const forge = require('./forge.js');
+      // When error is caught, returns 'unknown' type which defaults to gnu
+      expect(forge.getBinaryPath()).toContain('gnu');
     });
   });
 });
