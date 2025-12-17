@@ -79,8 +79,8 @@ function getGlibcVersion() {
 function isGlibcVersionSufficient(version) {
   if (!version) return false;
 
-  // Our binary requires 2.32 or higher
-  const requiredVersion = 2.32;
+  // Our binary requires 2.39 or higher
+  const requiredVersion = 2.39;
   const currentVersion = parseFloat(version);
 
   return currentVersion >= requiredVersion;

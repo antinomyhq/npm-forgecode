@@ -89,7 +89,7 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
       Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
       Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockLinuxLibc('ldd (GNU libc) 2.39');
       mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
       const forge = require('./forge.js');
@@ -112,7 +112,7 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
       Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
       Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
 
-      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockLinuxLibc('ldd (GNU libc) 2.39');
       mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
       const forge = require('./forge.js');
@@ -216,22 +216,22 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
   });
 
   describe('Glibc version detection', () => {
-    test('should detect glibc 2.35 as sufficient', () => {
+    test('should detect glibc 2.39 as sufficient', () => {
       Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
       Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockLinuxLibc('ldd (GNU libc) 2.39');
       mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
       const forge = require('./forge.js');
       expect(forge.getBinaryPath()).toContain('gnu');
     });
 
-    test('should detect glibc 2.32 as sufficient', () => {
+    test('should detect glibc 2.40 as sufficient', () => {
       Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
       Object.defineProperty(process, 'arch', { value: 'x64', writable: true, configurable: true });
 
-      mockLinuxLibc('ldd (GNU libc) 2.32');
+      mockLinuxLibc('ldd (GNU libc) 2.40');
       mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
       const forge = require('./forge.js');
@@ -304,7 +304,7 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
       Object.defineProperty(process, 'platform', { value: 'linux', writable: true, configurable: true });
       Object.defineProperty(process, 'arch', { value: 'arm64', writable: true, configurable: true });
 
-      mockLinuxLibc('ldd (GNU libc) 2.35');
+      mockLinuxLibc('ldd (GNU libc) 2.39');
       mockExistsSync.mockImplementation(path => !path.includes('/system/build.prop'));
 
       const forge = require('./forge.js');
@@ -341,7 +341,7 @@ describe('forge.js - Platform Detection and Binary Naming', () => {
         }
         if (cmd === 'getconf') {
           // getconf returns version
-          return createSpawnSyncResult(0, 'glibc 2.35', '');
+          return createSpawnSyncResult(0, 'glibc 2.39', '');
         }
         if (cmd === 'getprop') {
           return createSpawnSyncResult(1, '', '');
