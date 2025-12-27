@@ -21,13 +21,20 @@
 - [Command-Line Options](#command-line-options)
 - [Advanced Configuration](#advanced-configuration)
   - [Provider Configuration](#provider-configuration)
+    - [Managing Provider Credentials](#managing-provider-credentials)
+    - [Deprecated: Environment Variables](#deprecated-environment-variables)
   - [forge.yaml Configuration Options](#forgeyaml-configuration-options)
+  - [Environment Variables](#environment-variables)
   - [MCP Configuration](#mcp-configuration)
   - [Example Use Cases](#example-use-cases)
   - [Usage in Multi-Agent Workflows](#usage-in-multi-agent-workflows)
 - [Documentation](#documentation)
+- [Troubleshooting](#troubleshooting)
+  - [Linux glibc Compatibility Issues](#linux-glibc-compatibility-issues)
+- [The musl binary has fewer system dependencies and should work on most Linux systems regardless of glibc version.](#the-musl-binary-has-fewer-system-dependencies-and-should-work-on-most-linux-systems-regardless-of-glibc-version)
 - [Community](#community)
 - [Support Us](#support-us)
+- [License](#license)
 
 </details>
 
@@ -35,19 +42,20 @@
 
 ## Quickstart
 
-Sign up at [Forgecode.dev](https://app.forgecode.dev/app/) to create a key for the Forge provider.
-
-Then set up your Forge provider key:
-
-```bash
-# .env
-FORGE_KEY=ForgeKey
-```
-
-Run Forge in interactive mode via npx
+To get started with Forge, run the command below:
 
 ```bash
 npx forgecode@latest
+```
+
+On first run, Forge will guide you through setting up your AI provider credentials using the interactive login flow. Alternatively, you can configure providers beforehand:
+
+```bash
+# Configure your provider credentials interactively
+forge provider login
+
+# Then start Forge
+forge
 ```
 
 That's it! Forge is now ready to assist you with your development tasks.
@@ -176,25 +184,38 @@ Here's a quick reference of Forge's command-line options:
 
 ### Provider Configuration
 
-Forge supports multiple AI providers. Below are setup instructions for each supported provider:
-
-<details>
-<summary><strong>forgecode.dev (Recommended)</strong></summary>
+Forge supports multiple AI providers. The recommended way to configure providers is using the interactive login command:
 
 ```bash
-# .env
-FORGE_KEY=ForgeKey
+forge provider login
 ```
 
-To use Forgecode's provider with Forge:
+This will:
 
-1. Visit [https://app.forgecode.dev/](https://app.forgecode.dev/)
-2. Login with your existing credentials or create a new account
-3. Once logged in, your account will automatically enable the Forge Provider
+1. Show you a list of available providers
+2. Guide you through entering the required credentials
 
-_No changes in `forge.yaml` required_
+#### Managing Provider Credentials
 
-</details>
+```bash
+# Login to a provider (add or update credentials)
+forge provider login
+
+# Remove provider credentials
+forge provider logout
+
+# List supported providers
+forge provider list
+```
+
+#### Deprecated: Environment Variables
+
+> **⚠️ DEPRECATED**: Using `.env` files for provider configuration is deprecated and will be removed in a future version. Please use `forge provider login` instead.
+
+For backward compatibility, Forge still supports environment variables. On first run, any credentials found in environment variables will be automatically migrated to file-based storage.
+
+<details>
+<summary><strong>Legacy Environment Variable Setup (Deprecated)</strong></summary>
 
 <details>
 <summary><strong>OpenRouter</strong></summary>
@@ -204,7 +225,63 @@ _No changes in `forge.yaml` required_
 OPENROUTER_API_KEY=<your_openrouter_api_key>
 ```
 
-_No changes in `forge.yaml` required_
+</details>
+
+<details>
+<summary><strong>Requesty</strong></summary>
+
+```bash
+# .env
+REQUESTY_API_KEY=<your_requesty_api_key>
+```
+
+</details>
+
+<details>
+<summary><strong>x-ai</strong></summary>
+
+```bash
+# .env
+XAI_API_KEY=<your_xai_api_key>
+```
+
+</details>
+
+<details>
+<summary><strong>z.ai</strong></summary>
+
+```bash
+# .env
+ZAI_API_KEY=<your_zai_api_key>
+
+# Or for coding plan subscription
+ZAI_CODING_API_KEY=<your_zai_coding_api_key>
+```
+
+</details>
+
+<details>
+<summary><strong>Cerebras</strong></summary>
+
+```bash
+# .env
+CEREBRAS_API_KEY=<your_cerebras_api_key>
+```
+
+</details>
+
+<details>
+<summary><strong>IO Intelligence</strong></summary>
+
+```bash
+# .env
+IO_INTELLIGENCE_API_KEY=<your_io_intelligence_api_key>
+```
+
+```yaml
+# forge.yaml
+model: meta-llama/Llama-3.3-70B-Instruct
+```
 
 </details>
 
@@ -241,18 +318,47 @@ model: claude-3.7-sonnet
 <details>
 <summary><strong>Google Vertex AI</strong></summary>
 
+**Setup Instructions:**
+
+1. **Install Google Cloud CLI** and authenticate:
+
+   ```bash
+   gcloud auth login
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+
+2. **Get your authentication token**:
+
+   ```bash
+   gcloud auth print-access-token
+   ```
+
+3. **Use the token when logging in via Forge**:
+
+   ```bash
+   forge provider login
+   # Select Google Vertex AI and enter your credentials
+   ```
+
+**Legacy `.env` setup:**
+
 ```bash
 # .env
 PROJECT_ID=<your_project_id>
 LOCATION=<your_location>
-OPENAI_API_KEY=<vertex_ai_key>
-OPENAI_URL=https://${LOCATION}-aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}/locations/${LOCATION}/endpoints/openapi
+VERTEX_AI_AUTH_TOKEN=<your_auth_token>
 ```
 
 ```yaml
 # forge.yaml
-model: publishers/anthropic/models/claude-3-7-sonnet
+model: google/gemini-2.5-pro
 ```
+
+**Available Models:**
+- Claude models: `claude-sonnet-4@20250514`
+- Gemini models: `gemini-2.5-pro`, `gemini-2.0-flash`
+
+Use the `/model` command in Forge CLI to see all available models.
 
 </details>
 
@@ -294,27 +400,146 @@ model: deepseek-r1-distill-llama-70b
 To use Amazon Bedrock models with Forge, you'll need to first set up the [Bedrock Access Gateway](https://github.com/aws-samples/bedrock-access-gateway):
 
 1. **Set up Bedrock Access Gateway**:
+
    - Follow the deployment steps in the [Bedrock Access Gateway repo](https://github.com/aws-samples/bedrock-access-gateway)
    - Create your own API key in Secrets Manager
    - Deploy the CloudFormation stack
    - Note your API Base URL from the CloudFormation outputs
 
-2. **Create these files in your project directory**:
+2. **Configure in Forge**:
 
    ```bash
-   # .env
-   OPENAI_API_KEY=<your_bedrock_gateway_api_key>
-   OPENAI_URL=<your_bedrock_gateway_base_url>
+   forge provider login
+   # Select OpenAI-compatible provider and enter your Bedrock Gateway details
    ```
 
-   ```yaml
-   # forge.yaml
-   model: anthropic.claude-3-opus
-   ```
+**Legacy `.env` setup:**
 
-   </details>
+```bash
+# .env
+OPENAI_API_KEY=<your_bedrock_gateway_api_key>
+OPENAI_URL=<your_bedrock_gateway_base_url>
+```
+
+```yaml
+# forge.yaml
+model: anthropic.claude-3-opus
+```
+
+</details>
+
+</details>
+
+---
 
 ### forge.yaml Configuration Options
+
+### Environment Variables
+
+Forge supports several environment variables for advanced configuration and fine-tuning. These can be set in your `.env` file or system environment.
+
+<details>
+<summary><strong>Retry Configuration</strong></summary>
+
+Control how Forge handles retry logic for failed requests:
+
+```bash
+# .env
+FORGE_RETRY_INITIAL_BACKOFF_MS=1000    # Initial backoff time in milliseconds (default: 1000)
+FORGE_RETRY_BACKOFF_FACTOR=2           # Multiplier for backoff time (default: 2)
+FORGE_RETRY_MAX_ATTEMPTS=3             # Maximum retry attempts (default: 3)
+FORGE_SUPPRESS_RETRY_ERRORS=false      # Suppress retry error messages (default: false)
+FORGE_RETRY_STATUS_CODES=429,500,502   # HTTP status codes to retry (default: 429,500,502,503,504)
+```
+
+</details>
+
+<details>
+<summary><strong>HTTP Configuration</strong></summary>
+
+Fine-tune HTTP client behavior for API requests:
+
+```bash
+# .env
+FORGE_HTTP_CONNECT_TIMEOUT=30              # Connection timeout in seconds (default: 30)
+FORGE_HTTP_READ_TIMEOUT=900                # Read timeout in seconds (default: 900)
+FORGE_HTTP_POOL_IDLE_TIMEOUT=90            # Pool idle timeout in seconds (default: 90)
+FORGE_HTTP_POOL_MAX_IDLE_PER_HOST=5        # Max idle connections per host (default: 5)
+FORGE_HTTP_MAX_REDIRECTS=10                # Maximum redirects to follow (default: 10)
+FORGE_HTTP_USE_HICKORY=false               # Use Hickory DNS resolver (default: false)
+FORGE_HTTP_TLS_BACKEND=default             # TLS backend: "default" or "rustls" (default: "default")
+FORGE_HTTP_MIN_TLS_VERSION=1.2             # Minimum TLS version: "1.0", "1.1", "1.2", "1.3"
+FORGE_HTTP_MAX_TLS_VERSION=1.3             # Maximum TLS version: "1.0", "1.1", "1.2", "1.3"
+FORGE_HTTP_ADAPTIVE_WINDOW=true            # Enable HTTP/2 adaptive window (default: true)
+FORGE_HTTP_KEEP_ALIVE_INTERVAL=60          # Keep-alive interval in seconds (default: 60, use "none"/"disabled" to disable)
+FORGE_HTTP_KEEP_ALIVE_TIMEOUT=10           # Keep-alive timeout in seconds (default: 10)
+FORGE_HTTP_KEEP_ALIVE_WHILE_IDLE=true      # Keep-alive while idle (default: true)
+FORGE_HTTP_ACCEPT_INVALID_CERTS=false      # Accept invalid certificates (default: false) - USE WITH CAUTION
+FORGE_HTTP_ROOT_CERT_PATHS=/path/to/cert1.pem,/path/to/cert2.crt  # Paths to root certificate files (PEM, CRT, CER format), multiple paths separated by commas
+```
+
+> **⚠️ Security Warning**: Setting `FORGE_HTTP_ACCEPT_INVALID_CERTS=true` disables SSL/TLS certificate verification, which can expose you to man-in-the-middle attacks. Only use this in development environments or when you fully trust the network and endpoints.
+
+</details>
+
+<details>
+<summary><strong>API Configuration</strong></summary>
+
+Override default API endpoints:
+
+```bash
+# .env
+FORGE_API_URL=https://api.forgecode.dev  # Custom Forge API URL (default: https://api.forgecode.dev)
+```
+
+</details>
+
+<details>
+<summary><strong>Tool Configuration</strong></summary>
+
+Configuring the tool calls settings:
+
+```bash
+# .env
+FORGE_TOOL_TIMEOUT=300         # Maximum execution time in seconds for a tool before it is terminated to prevent hanging the session. (default: 300)
+FORGE_MAX_IMAGE_SIZE=262144    # Maximum image file size in bytes for read_image operations (default: 262144 - 256 KB)
+FORGE_DUMP_AUTO_OPEN=false     # Automatically open dump files in browser (default: false)
+FORGE_DEBUG_REQUESTS=/path/to/debug/requests.json  # Write debug HTTP request files to specified path (supports absolute and relative paths)
+```
+
+</details>
+
+<details>
+<summary><strong>ZSH Plugin Configuration</strong></summary>
+
+Configure the ZSH plugin behavior:
+
+```bash
+# .env
+FORGE_BIN=forge                    # Command to use for forge operations (default: "forge")
+```
+
+The `FORGE_BIN` environment variable allows you to customize the command used by the ZSH plugin when transforming `#` prefixed commands. If not set, it defaults to `"forge"`.
+
+</details>
+
+<details>
+<summary><strong>System Configuration</strong></summary>
+
+System-level environment variables (usually set automatically):
+
+```bash
+# .env
+FORGE_MAX_SEARCH_RESULT_BYTES=101024   # Maximum bytes for search results (default: 101024 - 10 KB)
+FORGE_HISTORY_FILE=/path/to/history    # Custom path for Forge history file (default: uses system default location)
+FORGE_BANNER="Your custom banner text" # Custom banner text to display on startup (default: Forge ASCII art)
+FORGE_SHOW_TASK_STATS=true             # Show task stats such as file changes, token usage etc. after completion (default: true)
+FORGE_MAX_CONVERSATIONS=100            # Maximum number of conversations to show in list (default: 100)
+SHELL=/bin/zsh                         # Shell to use for command execution (Unix/Linux/macOS)
+COMSPEC=cmd.exe                        # Command processor to use (Windows)
+```
+
+</details>
 
 The `forge.yaml` file supports several advanced configuration options that let you customize Forge's behavior.
 
@@ -341,9 +566,9 @@ Define custom commands as shortcuts for repetitive prompts:
 ```yaml
 # forge.yaml
 commands:
-  - name: 'refactor'
-    description: 'Refactor selected code'
-    prompt: 'Please refactor this code to improve readability and performance'
+  - name: "refactor"
+    description: "Refactor selected code"
+    prompt: "Please refactor this code to improve readability and performance"
 ```
 
 </details>
@@ -355,7 +580,7 @@ Specify the default AI model to use for all agents in the workflow.
 
 ```yaml
 # forge.yaml
-model: 'claude-3.7-sonnet'
+model: "claude-3.7-sonnet"
 ```
 
 </details>
@@ -381,6 +606,37 @@ Adjust the creativity and randomness in AI responses. Lower values (0.0-0.3) pro
 # forge.yaml
 temperature: 0.7 # Balanced creativity and focus
 ```
+
+</details>
+<details>
+<summary><strong>Tool Max Failure Limit</strong></summary>
+
+Control how many times a tool can fail before Forge forces completion to prevent infinite retry loops. This helps avoid situations where an agent gets stuck repeatedly trying the same failing operation.
+
+```yaml
+# forge.yaml
+max_tool_failure_per_turn: 3 # Allow up to 3 failures per tool before forcing completion
+```
+
+Set to a higher value if you want more retry attempts, or lower if you want faster failure detection.
+
+</details>
+
+<details>
+<summary><strong>Max Requests Per Turn</strong></summary>
+
+Limit the maximum number of requests an agent can make in a single conversation turn. This prevents runaway conversations and helps control API usage and costs.
+
+```yaml
+# forge.yaml
+max_requests_per_turn: 50 # Allow up to 50 requests per turn
+```
+
+When this limit is reached, Forge will:
+
+- Ask you if you wish to continue
+- If you respond with 'Yes', it will continue the conversation
+- If you respond with 'No', it will end the conversation
 
 </details>
 
@@ -453,10 +709,9 @@ MCP tools can be used as part of multi-agent workflows, allowing specialized age
 
 ## Documentation
 
-For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://forgecode.dev/docs).
+For comprehensive documentation on all features and capabilities, please visit the [documentation site](https://github.com/antinomyhq/forge/tree/main/docs).
 
 ---
-
 ## Troubleshooting
 
 ### Linux glibc Compatibility Issues
@@ -482,7 +737,6 @@ This means the binary requires a newer version of glibc than what's available on
 3. **Use a Docker container with a newer Linux distribution**
 
 ## The musl binary has fewer system dependencies and should work on most Linux systems regardless of glibc version.
-
 ## Community
 
 Join our vibrant Discord community to connect with other Forge users and contributors, get help with your projects, share ideas, and provide feedback!
